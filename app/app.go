@@ -4,11 +4,14 @@ import (
 	"capi/domain"
 	"capi/logger"
 	"capi/service"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"
 	"github.com/joho/godotenv"
@@ -71,7 +74,7 @@ func Start() {
 
 	authR.Use(loggingMiddleware)
 	// * defining routes
-	// mux.HandleFunc("/auth/login", authH.Login).Methods(http.MethodPost)
+	// authR.HandleFunc("/auth/login", authH.Login).Methods(http.MethodPost)
 
 	mux.HandleFunc("/customers", ch.getAllCustomers).Methods(http.MethodGet)
 	mux.HandleFunc("/customers/{customer_id:[0-9]+}", ch.getCustomerByID).Methods(http.MethodGet)
@@ -115,16 +118,45 @@ func loggingMiddleware(next http.Handler) http.Handler {
 
 func authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token := r.Header.Get("Authorization")
+		tokenHeader := r.Header.Get("Authorization")
 
+		// pengecekan apakah ada token atau tidak
+		if tokenHeader == "" {
+			writeResponse(w, http.StatusUnauthorized, "You have not login yet")
+			return
+		}
+
+		// pengecekan apakah token adalah bearer token
+		if !strings.Contains(tokenHeader, "Bearer") {
+			writeResponse(w, http.StatusUnauthorized, "you token not valid")
+			return
+		}
 		// split token -> ambil tokennya buang "Bearer" nya
+		splitToken := strings.Split(tokenHeader, " ")
+		token := splitToken[1]
 
 		// parsing token, err := jwt.Parse(
+		parseToken, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
+			return []byte("rahasia"), nil
+		})
 
 		// check token validation
-
-		logger.Info(token)
+		if err != nil {
+			if errors.Is(err, jwt.ErrTokenMalformed) {
+				logger.Error(err.Error())
+				writeResponse(w, http.StatusUnauthorized, "your token is not valid ")
+				return
+			} else if errors.Is(err, jwt.ErrTokenExpired) || errors.Is(err, jwt.ErrTokenNotValidYet) {
+				writeResponse(w, http.StatusBadGateway, "Timeout to parse token")
+				return
+			} else {
+				logger.Error("could handle this token " + err.Error())
+				writeResponse(w, http.StatusBadRequest, "internal server error")
+				return
+			}
+		}
 
 		next.ServeHTTP(w, r)
+		writeResponse(w, http.StatusOK, parseToken.Claims)
 	})
 }
