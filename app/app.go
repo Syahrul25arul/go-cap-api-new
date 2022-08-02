@@ -73,15 +73,15 @@ func Start() {
 	authR.HandleFunc("/login", authH.Login).Methods(http.MethodPost)
 
 	authR.Use(loggingMiddleware)
-	// * defining routes
-	// authR.HandleFunc("/auth/login", authH.Login).Methods(http.MethodPost)
 
-	mux.HandleFunc("/customers", ch.getAllCustomers).Methods(http.MethodGet)
-	mux.HandleFunc("/customers/{customer_id:[0-9]+}", ch.getCustomerByID).Methods(http.MethodGet)
-	mux.HandleFunc("/customers/{customer_id:[0-9]+}/accounts", ah.NewAccount).Methods(http.MethodPost)
-	mux.HandleFunc("/customers/{customer_id:[0-9]+}/accounts/{account_id:[0-9]+}", ah.MakeTransaction).Methods(http.MethodPost)
+	// * defining routes for customer
+	customerR := mux.PathPrefix("/customers").Subrouter()
 
-	mux.Use(authMiddleware)
+	customerR.HandleFunc("", ch.getAllCustomers).Methods(http.MethodGet)
+	customerR.HandleFunc("/{customer_id:[0-9]+}", ch.getCustomerByID).Methods(http.MethodGet)
+	customerR.HandleFunc("/{customer_id:[0-9]+}/accounts", ah.NewAccount).Methods(http.MethodPost)
+	customerR.HandleFunc("/{customer_id:[0-9]+}/accounts/{account_id:[0-9]+}", ah.MakeTransaction).Methods(http.MethodPost)
+	customerR.Use(authMiddleware)
 	// * starting the server
 
 	serverAddr := os.Getenv("SERVER_ADDRESS")
